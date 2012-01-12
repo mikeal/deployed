@@ -20,7 +20,7 @@
         "domains": ["testdomain"]
       },
       "./test/sub.js": {
-        "processes": 1,
+        "processes": 1
       }
     }
   }
