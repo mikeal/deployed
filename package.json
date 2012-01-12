@@ -1,0 +1,27 @@
+{
+  "author": "Mikeal Rogers <mikeal.rogers@gmail.com>",
+  "name": "deployed",
+  "description": "Deployment system.",
+  "version": "0.0.0",
+  "repository": {
+    "url": ""
+  },
+  "main": "main.js",
+  "engines": {
+    "node": "~0.4.13 || 0.4.13-pre"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  
+  "deploy": {
+    "master": {
+      "./test/app.js" : {
+        "processes": 1,
+        "domains": ["testdomain"]
+      },
+      "./test/sub.js": {
+        "processes": 1,
+      }
+    }
+  }
+}
