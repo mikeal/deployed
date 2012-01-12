@@ -6,11 +6,18 @@
   "repository": {
     "url": ""
   },
-  "main": "main.js",
+  "main": "index.js",
   "engines": {
     "node": "~0.4.13 || 0.4.13-pre"
   },
-  "dependencies": {},
+  "dependencies": [
+    "bouncy",
+    "dnode",
+    "procstreams",
+    "pushover",
+    "replicant",
+    "underscore"
+  ],
   "devDependencies": {},
   
   "deploy": {
