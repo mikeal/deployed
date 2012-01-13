@@ -7,16 +7,16 @@
     "url": ""
   },
   "main": "index.js",
-  "engines": {
-    "node": "~0.4.13 || 0.4.13-pre"
+  "dependencies": {
+    "bouncy":"*",
+    "dnode":"*",
+    "git-emit":"*",
+    "pushover":"*",
+    "replicant":"*",
+    "underscore":"*"
   },
-  "dependencies": [
-    "bouncy",
-    "dnode",
-    "procstreams",
-    "pushover",
-    "replicant",
-    "underscore"
+  "bundleDependencies": [
+    "procstreams"
   ],
   "devDependencies": {},
   
