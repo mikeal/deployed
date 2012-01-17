@@ -1,11 +1,12 @@
 var pushover = require('pushover')
-  , replicant = require('replicant')
   , gitemit = require('git-emit')
   , util = require('util')
   , net = require('net')
+  , http = require('http')
   , events = require('events')
   , path = require('path')
   , fs = require('fs')
+  , upnode = require('upnode')
   , _ = require('underscore')
   , procstreams = require('procstreams')
   , childprocess = require('child_process')
@@ -13,31 +14,6 @@ var pushover = require('pushover')
   , dnode = require('dnode')
   , uuid = require('./uuid')
   ;
-  
-function deploy (config, cb) {
-  var example =
-      { processes: 4
-      , repo: '/repo/app'
-      , rev: 'sadfh87ashdf87ashdf87ashdf'
-      , workdir: '/deploys'
-      }
-    , workdir = path.join(config.workdir, config.rev)
-    ;
-  
-  procstreams('mkdir '+path.join(config.workdir, config.rev))
-  .and('git archive --format=tar '+config.rev, {cwd:config.rep})
-  .pipe('tar -x', {cwd:workdir})
-  .on('exit', function () {
-    fs.readFile(path.join(workdir, 'package.json'), function (err, data) {
-      console.log(data.length)
-      process.exit()
-      if (err) throw err
-      var pkg = JSON.parse(data.toString())
-      pkg.path = workdir 
-      cb(null, pkg)
-    })
-  })
-} 
 
 var portrange = 45032
   , httpportrange = 50032
@@ -50,24 +26,48 @@ function Child (proc, rev, cb) {
   self.workdir = path.join(self.process.branch.deployment.workdir, uuid())
   self.port = portrange + 1
   portrange += 1
-  console.error(self.workdir)
+  
+  function spawn (cb) {
+    self.child = childprocess.spawn('node', [path.resolve(self.workdir, self.process.name), '--deployCtrlPort='+self.port])
+    self.child.stdout.pipe(process.stdout)
+    self.child.stderr.pipe(process.stderr) 
+    self.child.on('exit', function () {
+      // TODO: Add handling for possible infinite restart loops
+      if (!self.closed) {
+        console.error("processes exited, restarting!")
+        spawn(function () {})
+      }
+    })
+    cb()
+  }
+  
   fs.mkdir(self.workdir, 0755, function (e) {
     if (e) return cb(e)
     procstreams('git archive --format=tar '+rev, {cwd:self.process.branch.deployment.repo})
     .pipe('tar -x', {cwd:self.workdir})
     .on('exit', function (status) {
-      self.child = childprocess.spawn('node', [path.resolve(self.workdir, self.process.name), '--deployCtrlPort='+self.port])
-      self.child.stdout.pipe(process.stdout)
-      self.child.stderr.pipe(process.stderr)
-      setTimeout(function () {
-        console.log('moar!')
-        dnode.connect(self.port, function (remote) {
-          self.remote = remote
-          cb(null)
-        })
-      }, 1 * 1000)
+      spawn(function () {
+        setTimeout(function () {
+          console.log('moar!')
+          self.up = upnode.connect(self.port, function (remote) {
+            self.remote = remote
+            cb(null)
+          })
+        }, 1 * 1000)
+      })
     })
   })
+}
+Child.prototype.close = function () {
+  var self = this
+  self.closed = true
+  self.remote.close(function (err) {
+    if (err) return console.error('child reports close error', err.message)
+    console.log("child reports close.")
+  })
+  setTimeout(function () {
+    self.child.kill('SIGKILL')
+  }, 60 * 1000) // one minute hard timeout on all child processes
 }
 // util.inherits(Child, events.EventEmitter)
 
@@ -90,16 +90,21 @@ Process.prototype.roll = function (rev, info) {
     console.log('creating child')
     self.child = new Child(self, rev, function (e) {
       if (e) throw e
-      if (info.domain) {
+      if (info.domains) {
         self.child.httpPort = httpportrange + 1
         httpportrange += 1
+        // set info and rev, there is a bug, this will be HEAD on startup
+        self.child.remote.setInfo({process:info, rev:rev})
         self.child.remote.startHttpServer(self.child.httpPort, function (err) {
           if (err) throw err
           if (oldchild) oldchild.close()
+          console.log('info', info)
           if (info.domains) {
             info.domains.forEach(function (domain) {
+              if (!self.branch.deployment.routing[domain]) self.branch.deployment.routing[domain] = {}
               self.branch.deployment.routing[domain][self.branch.name] = [self.child.httpPort]
             })
+            self.currentInfo = info 
             self.rolling = false
             if (self.nextRoll) self.nextRoll()
           }
@@ -139,6 +144,21 @@ Branch.prototype.process = function (name) {
   if (!this.process[name]) this.process[name] = new Process(this, name)
   return this.process[name]
 }
+Branch.prototype.update = function (update) {
+  var self = this
+  console.log('update')
+  fs.readFile(path.join(self.deployment.repo, 'package.json'), function (err, data) {
+    if (err) throw err
+    console.log('got package')
+    var pkg = JSON.parse(data.toString())
+    console.log(self.name)
+    console.log(pkg.deploy[self.name])
+    _.each(pkg.deploy[self.name], function (pinfo, process) {
+      console.log('rolling')
+      self.process(process).roll(update.arguments[2], pinfo)
+    }) 
+  })
+}
 
 function Deployment (repo) {
   var self = this
@@ -154,15 +174,11 @@ function Deployment (repo) {
   })
   fs.readFile(path.join(self.repo, 'package.json'), function (err, data) {
     var pkg = JSON.parse(data.toString())
-    console.log('working.')
     _.each(pkg.deploy, function (binfo, branch) {
-      console.log('dep')
       _.each(binfo, function (pinfo, process) {
-        console.log('rolling')
         self.branch(branch).process(process).roll('HEAD', pinfo)
       })
     })
-    
   })
   
 }
@@ -173,13 +189,13 @@ Deployment.prototype.branch = function (name) {
 
 Deployment.prototype.onUpdate = function (update) {
   var self = this
-  if (!update.arguments[0].slice(0, 'refs/heads/'.length) === 'refs/heads/') {
+  if (update.arguments[0].slice(0, 'refs/heads/'.length) !== 'refs/heads/') {
     console.log("Not a head push, skipping")
     update.accept()
     return
   }
   update.accept()
-  self.branch(update.arguments[0].slice(0, 'refs/heads/'.length)).update(update)
+  self.branch(update.arguments[0].slice('refs/heads/'.length)).update(update)
 }
 Deployment.prototype.listen = function () {
   this.port = arguments[0]
@@ -193,10 +209,10 @@ function noroute (bounce) {
 }
 
 Deployment.prototype.balance = function () {
-  
+  var self = this
   bouncy(function (req, bounce) {
     var host = req.headers.host
-    
+    console.log(self.routing)
     if (!host) return console.error('Request has no host header.')
     if (self.routing[host]) return bounce.apply(bounce, self.routing[host].master)
     if (!host.indexOf('.')) return noroute(bounce)
@@ -218,19 +234,34 @@ module.exports = function (repo) {
 
 function control (port) {
   var service = {}
-  service.heartbeat = function (cb) {
-    cb(null, true)
-  }
   service.startHttpServer = function (port, cb) {
     if (!module.exports.http) return cb(new Error('deploy.http is not defined.'))
     module.exports.httpPort = port
-    http.createServer(module.exports.http).listen(port, cb)
+    module.exports.httpServer = http.createServer(module.exports.http)
+    module.exports.httpServer.listen(port, cb)
   }
   service.info = function (cb) {
-    cb(null, {port:port, httpPort:module.exports.httpPort, env:process.env})
+    cb(null, {port:port, httpPort:module.exports.httpPort, env:process.env, info:module.exports.info})
+  }
+  service.setInfo = function (info, cb) {
+    module.exports.info = info
+    if (cb) cb()
+  }
+  service.close = function (cb) {
+    if (module.exports.httpServer) {
+      module.exports.httpServer.close()
+      if (module.exports.close) return module.exports.close(cb)
+    } else if (module.exports.close) {
+      return module.exports.close(cb)
+    } else {
+      cb()
+      process.exit()
+    }
   }
   
-  dnode(service).listen(port, function () {
+  var server = dnode(service)
+  server.use(upnode.ping)
+  server.listen(port, function () {
     console.log("Deploy Control is up on port "+port+'.')
   })
 }

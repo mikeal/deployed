@@ -11,9 +11,10 @@
     "bouncy":"*",
     "dnode":"*",
     "git-emit":"*",
+    "procstreams":"*",
     "pushover":"*",
-    "replicant":"*",
-    "underscore":"*"
+    "underscore":"*",
+    "upnode":"*"
   },
   "bundleDependencies": [
     "procstreams"
