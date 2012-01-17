@@ -2,7 +2,7 @@
   "author": "Mikeal Rogers <mikeal.rogers@gmail.com>",
   "name": "deployed",
   "description": "Deployment system.",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "repository": {
     "url": ""
   },
@@ -14,22 +14,8 @@
     "procstreams":"*",
     "pushover":"*",
     "underscore":"*",
+    "upstream":"*",
     "upnode":"*"
-  },
-  "bundleDependencies": [
-    "procstreams"
-  ],
-  "devDependencies": {},
-  
-  "deploy": {
-    "master": {
-      "./test/app.js" : {
-        "processes": 1,
-        "domains": ["testdomain"]
-      },
-      "./test/sub.js": {
-        "processes": 1
-      }
-    }
   }
+  
 }
