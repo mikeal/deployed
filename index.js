@@ -208,7 +208,7 @@ function noroute (bounce) {
   resp.end('No route for this host header.')
 }
 
-Deployment.prototype.balance = function () {
+Deployment.prototype.balance = function (port) {
   var self = this
   bouncy(function (req, bounce) {
     var host = req.headers.host
@@ -225,7 +225,7 @@ Deployment.prototype.balance = function () {
     if (!self.routing[hostdomain][subdomain]) return noroute(bounce)
     bounce.apply(bounce, self.routing[host][subdomain])
     
-  }).listen(8000);
+  }).listen(port);
 }
 
 module.exports = function (repo) {
