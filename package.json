@@ -2,11 +2,12 @@
   "author": "Mikeal Rogers <mikeal.rogers@gmail.com>",
   "name": "deployed",
   "description": "Deployment system.",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "repository": {
-    "url": ""
+    "url": "git://github.com/mikeal/deployed.git"
   },
   "main": "index.js",
+  "files": ["index.js", "uuid.js"],
   "dependencies": {
     "bouncy":"*",
     "dnode":"*",
