@@ -212,7 +212,6 @@ Deployment.prototype.balance = function (port) {
   var self = this
   bouncy(function (req, bounce) {
     var host = req.headers.host
-    console.log(self.routing)
     if (!host) return console.error('Request has no host header.')
     if (self.routing[host]) return bounce.apply(bounce, self.routing[host].master)
     if (!host.indexOf('.')) return noroute(bounce)
