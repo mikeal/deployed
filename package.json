@@ -2,7 +2,7 @@
   "author": "Mikeal Rogers <mikeal.rogers@gmail.com>",
   "name": "deployed",
   "description": "Deployment system.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "repository": {
     "url": "git://github.com/mikeal/deployed.git"
   },
